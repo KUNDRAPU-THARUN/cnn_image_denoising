@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import numpy as np
 import streamlit as st
@@ -17,6 +19,15 @@ def main():
     @st.cache_resource
     def load_model():
         model = DenoisingCNN()
+        weights_path = "denoising_model_weights.pth"
+
+        if os.path.exists(weights_path):
+            state_dict = torch.load(weights_path, map_location="cpu")
+            model.load_state_dict(state_dict)
+            st.sidebar.success("Loaded saved CNN weights from denoising_model_weights.pth")
+        else:
+            st.sidebar.warning("No saved weights found. Using a clean untrained baseline model.")
+
         model.eval()
         return model
 
@@ -37,7 +48,7 @@ def main():
 
     def compute_metrics(original, denoised):
         psnr = compute_psnr(original, denoised)
-        ssim = compute_ssim(original, denoised, channel_axis=2)
+        ssim = compute_ssim(original, denoised, channel_axis=2, data_range=255)
         return psnr, ssim
 
     st.sidebar.header("Image Controls")
@@ -48,8 +59,8 @@ def main():
         st.warning("Please upload an image from the sidebar to begin.")
         return
 
-    clean_image = Image.open(uploaded_file).convert("RGB")
-    clean_np = np.array(clean_image)
+    image = Image.open(uploaded_file).resize((256, 256)).convert("RGB")
+    clean_np = np.array(image)
     noisy_np = add_gaussian_noise(clean_np, noise_level)
 
     baseline_gaussian = cv2.GaussianBlur(noisy_np, (5, 5), 1.0)
@@ -62,7 +73,7 @@ def main():
         noisy_tensor = preprocess_image(noisy_np).to(device)
         cnn_output_tensor = model(noisy_tensor)
 
-    cnn_np = tensor_to_image(cnn_output_tensor)
+    cnn_np = tensor_to_image(cnn_output_tensor).astype(np.uint8)
 
     st.markdown("### Visual Comparison")
     col1, col2, col3, col4 = st.columns(4)

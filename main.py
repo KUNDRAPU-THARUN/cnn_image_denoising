@@ -1,25 +1,25 @@
-import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage.metrics import peak_signal_noise_ratio as compute_psnr
-from skimage.metrics import structural_similarity as compute_ssim
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
+from skimage.metrics import peak_signal_noise_ratio as compute_psnr
+from skimage.metrics import structural_similarity as compute_ssim
 from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
 
 from model import DenoisingCNN
 
-# 1. Device Setup (Leverage GPU if available, else CPU)
+# 1. Device Setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Active Compute Device: {device}")
 
-# 2. Additive White Gaussian Noise (AWGN) Generator
+torch.manual_seed(42)
+np.random.seed(42)
+
+# 2. AWGN Generator
 def inject_noise(images, noise_factor=0.2):
-    """Corrupts image tensors with normalized Gaussian noise."""
     noisy = images + noise_factor * torch.randn_like(images)
     return torch.clamp(noisy, 0.0, 1.0)
 
@@ -29,7 +29,6 @@ print("Downloading / Verifying CIFAR-10 Dataset...")
 train_data_full = datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
 test_data_full = datasets.CIFAR10(root="./data", train=False, download=True, transform=transform)
 
-# Subsetting dataset for efficient desktop training
 train_subset = Subset(train_data_full, range(6000))
 test_subset = Subset(test_data_full, range(100))
 
@@ -61,7 +60,12 @@ for epoch in range(epochs):
     epoch_loss = running_loss / len(train_loader.dataset)
     print(f"Epoch [{epoch+1}/{epochs}] - Loss (MSE): {epoch_loss:.5f}")
 
-# 5. Model Inference on Unseen Test Sample
+# 5. Save trained weights
+weights_path = "denoising_model_weights.pth"
+torch.save(model.state_dict(), weights_path)
+print(f"Saved trained model weights to: {weights_path}")
+
+# 6. Model Inference on Unseen Test Sample
 model.eval()
 clean_tensor, _ = next(iter(test_loader))
 clean_tensor = clean_tensor.to(device)
@@ -70,7 +74,7 @@ noisy_tensor = inject_noise(clean_tensor, noise_factor=0.2).to(device)
 with torch.no_grad():
     cnn_reconstructed_tensor = model(noisy_tensor)
 
-# 6. Tensor to NumPy (H, W, C) Format Conversion
+# 7. Tensor to NumPy (H, W, C) Format Conversion
 def tensor_to_cv2(tensor):
     img = tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
     return (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
@@ -79,31 +83,31 @@ clean_np = tensor_to_cv2(clean_tensor)
 noisy_np = tensor_to_cv2(noisy_tensor)
 cnn_np = tensor_to_cv2(cnn_reconstructed_tensor)
 
-# 7. Classical Baseline Filtering (OpenCV)
+# 8. Classical Baseline Filtering (OpenCV)
 gaussian_np = cv2.GaussianBlur(noisy_np, (5, 5), sigmaX=1.0)
 median_np = cv2.medianBlur(noisy_np, 3)
 bilateral_np = cv2.bilateralFilter(noisy_np, d=5, sigmaColor=50, sigmaSpace=50)
 
-# 8. Quantitative Benchmark Calculation
+# 9. Quantitative Benchmark Calculation
 comparisons = {
     "Noisy Image": noisy_np,
     "Gaussian Filter": gaussian_np,
     "Median Filter": median_np,
     "Bilateral Filter": bilateral_np,
-    "CNN Autoencoder": cnn_np
+    "CNN Autoencoder": cnn_np,
 }
 
-print("\n" + "="*50)
+print("\n" + "=" * 50)
 print(f"{'Method':<20} | {'PSNR (dB)':<12} | {'SSIM':<10}")
-print("="*50)
+print("=" * 50)
 
 for name, output_img in comparisons.items():
     psnr_score = compute_psnr(clean_np, output_img)
-    ssim_score = compute_ssim(clean_np, output_img, channel_axis=2)
+    ssim_score = compute_ssim(clean_np, output_img, channel_axis=2, data_range=255)
     print(f"{name:<20} | {psnr_score:<12.2f} | {ssim_score:<10.4f}")
-print("="*50)
+print("=" * 50)
 
-# 9. Plotting and Exporting Visual Results
+# 10. Plotting and Exporting Visual Results
 fig, axes = plt.subplots(1, 6, figsize=(18, 3.5))
 visual_sequence = [
     ("Original Clean", clean_np),
@@ -111,7 +115,7 @@ visual_sequence = [
     ("Gaussian Filter", gaussian_np),
     ("Median Filter", median_np),
     ("Bilateral Filter", bilateral_np),
-    ("CNN Autoencoder", cnn_np)
+    ("CNN Autoencoder", cnn_np),
 ]
 
 for ax, (title, img) in zip(axes, visual_sequence):

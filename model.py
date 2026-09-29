@@ -29,7 +29,7 @@ class DenoisingCNN(nn.Module):
 
 
 if __name__ == "__main__":
-    sample_tensor = torch.randn(1, 3, 32, 32)
+    sample_tensor = torch.randn(1, 3, 256, 256)
     model = DenoisingCNN()
     output = model(sample_tensor)
     print(f"Input shape: {sample_tensor.shape} -> Output shape: {output.shape}")
