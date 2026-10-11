@@ -3,5 +3,6 @@ torchvision
 opencv-python-headless
 scikit-image
 streamlit
+streamlit-image-comparison
 numpy
 pillow

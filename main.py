@@ -9,7 +9,7 @@ from skimage.metrics import structural_similarity as compute_ssim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
-from model import DenoisingCNN
+from model import UNetDenoising
 
 # 1. Device Setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -36,12 +36,12 @@ train_loader = DataLoader(train_subset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_subset, batch_size=1, shuffle=False)
 
 # 4. Model Training Pipeline
-model = DenoisingCNN().to(device)
+model = UNetDenoising().to(device)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 epochs = 6
-print(f"\nStarting CNN Autoencoder Training ({epochs} epochs)...")
+print(f"\nStarting U-Net Denoising Training ({epochs} epochs)...")
 for epoch in range(epochs):
     model.train()
     running_loss = 0.0
@@ -61,7 +61,7 @@ for epoch in range(epochs):
     print(f"Epoch [{epoch+1}/{epochs}] - Loss (MSE): {epoch_loss:.5f}")
 
 # 5. Save trained weights
-weights_path = "denoising_model_weights.pth"
+weights_path = "unet_denoising_weights.pth"
 torch.save(model.state_dict(), weights_path)
 print(f"Saved trained model weights to: {weights_path}")
 
@@ -94,7 +94,7 @@ comparisons = {
     "Gaussian Filter": gaussian_np,
     "Median Filter": median_np,
     "Bilateral Filter": bilateral_np,
-    "CNN Autoencoder": cnn_np,
+    "U-Net Denoiser": cnn_np,
 }
 
 print("\n" + "=" * 50)
@@ -115,7 +115,7 @@ visual_sequence = [
     ("Gaussian Filter", gaussian_np),
     ("Median Filter", median_np),
     ("Bilateral Filter", bilateral_np),
-    ("CNN Autoencoder", cnn_np),
+    ("U-Net Denoiser", cnn_np),
 ]
 
 for ax, (title, img) in zip(axes, visual_sequence):
